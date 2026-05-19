@@ -1,0 +1,188 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: 'owner' | 'admin' | 'member';
+  photoURL?: string;
+  bio?: string;
+  skills?: string[];
+  experience?: string;
+  github?: string;
+  telegram?: string;
+  specialization?: string;
+  education?: string;
+  completedProjectsCount?: number;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  assigneeId: string;
+  deadline: any;
+  status: 'pending' | 'signed_off' | 'verified';
+  assignedBy: string;
+  createdAt: any;
+}
+
+export interface ServiceRequest {
+  id: string;
+  customerName: string;
+  customerContact: string;
+  projectType: 'web' | 'apk' | 'bot' | 'infra' | 'other';
+  description: string;
+  status: 'new' | 'reviewing' | 'accepted' | 'rejected';
+  createdAt: any;
+}
+
+export async function submitServiceRequest(request: Omit<ServiceRequest, 'id' | 'createdAt' | 'status'>) {
+  const ref = doc(collection(db, 'serviceRequests'));
+  try {
+    await setDoc(ref, {
+      ...request,
+      id: ref.id,
+      status: 'new',
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'serviceRequests');
+  }
+}
+
+export async function assignTask(task: Omit<Task, 'id' | 'createdAt' | 'status'>) {
+  const ref = doc(collection(db, 'tasks'));
+  try {
+    await setDoc(ref, {
+      ...task,
+      id: ref.id,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'tasks');
+  }
+}
+
+export async function updateTaskStatus(id: string, status: Task['status']) {
+  const ref = doc(db, 'tasks', id);
+  try {
+    await updateDoc(ref, { status });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `tasks/${id}`);
+  }
+}
+
+export async function syncUserProfile(user: FirebaseUser): Promise<UserProfile | null> {
+  const userRef = doc(db, 'users', user.uid);
+  try {
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      // Determine role: Owner email check
+      const role = user.email === 'tuyginovsardor36@gmail.com' ? 'owner' : 'member';
+      const newProfile: UserProfile = {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || 'Developer',
+        role,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      await setDoc(userRef, newProfile);
+      return { ...newProfile, createdAt: new Date(), updatedAt: new Date() };
+    }
+    return userDoc.data() as UserProfile;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+    return null;
+  }
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  type: string;
+  authorId: string;
+  createdAt: any;
+}
+
+export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>) {
+  const productRef = doc(collection(db, 'products'));
+  try {
+    await setDoc(productRef, {
+      ...product,
+      id: productRef.id,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'products');
+  }
+}
+
+export async function updateProduct(id: string, data: Partial<Product>) {
+  const productRef = doc(db, 'products', id);
+  try {
+    await updateDoc(productRef, data);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `products/${id}`);
+  }
+}
+
+export async function deleteProduct(id: string) {
+  const productRef = doc(db, 'products', id);
+  try {
+    const { deleteDoc } = await import('firebase/firestore');
+    await deleteDoc(productRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `products/${id}`);
+  }
+}

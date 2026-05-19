@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user in the system with roles and detailed portfolio data.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "admin", "member"] },
+        "photoURL": { "type": "string" },
+        "bio": { "type": "string" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "experience": { "type": "string" },
+        "github": { "type": "string" },
+        "telegram": { "type": "string" },
+        "specialization": { "type": "string" },
+        "education": { "type": "string" },
+        "completedProjectsCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Inner team task management.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "assigneeId": { "type": "string" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "signed_off", "verified"] },
+        "assignedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ServiceRequest": {
+      "title": "ServiceRequest",
+      "description": "A customer request for a project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerContact": { "type": "string" },
+        "projectType": { "type": "string", "enum": ["web", "apk", "bot", "infra", "other"] },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "reviewing", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "customerContact", "projectType", "description", "status", "createdAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "An SDK, template, or service listed on the marketplace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "type": { "type": "string" },
+        "authorId": { "type": "string", "description": "UID of the creator." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "description", "price", "category", "type", "authorId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and roles."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Marketplace items."
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Internal team tasks."
+    },
+    "/serviceRequests/{requestId}": {
+      "schema": "ServiceRequest",
+      "description": "Client project inquiries."
+    }
+  }
+}

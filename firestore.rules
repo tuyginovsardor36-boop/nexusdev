@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner() {
+      return isSignedIn() && request.auth.token.email == 'tuyginovsardor36@gmail.com';
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (getRole() == 'admin' || getRole() == 'owner' || isOwner());
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Validation Helpers ---
+    function isValidUser(data) {
+      return data.size() == 6
+        && data.uid == request.auth.uid
+        && data.email == request.auth.token.email
+        && data.displayName is string
+        && data.displayName.size() <= 100
+        && data.role in ['owner', 'admin', 'member']
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidProduct(data) {
+      return data.size() >= 7
+        && data.name is string && data.name.size() <= 200
+        && data.description is string && data.description.size() <= 2000
+        && data.price is number && data.price >= 0
+        && data.category is string && data.category.size() <= 100
+        && data.type is string && data.type.size() <= 50
+        && data.authorId == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    // --- Match Rules ---
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      
+      allow create: if isSignedIn() 
+        && userId == request.auth.uid 
+        && incoming().uid == userId
+        && incoming().role == 'member' // Default role for safety
+        || isOwner();
+
+      allow update: if isSignedIn()
+        && userId == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Allow users to edit their portfolio fields
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'photoURL', 'bio', 'skills', 'experience', 
+            'github', 'telegram', 'specialization', 'education', 'updatedAt'
+          ])
+          ||
+          isOwner() && incoming().diff(existing()).affectedKeys().hasAny(['role', 'updatedAt'])
+        );
+      
+      allow update: if isOwner() 
+        && isValidId(userId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (userId != request.auth.uid || existing().role == 'owner');
+
+      allow delete: if false;
+    }
+
+    // TASKS COLLECTION
+    match /tasks/{taskId} {
+      allow read: if isAdmin() || (isSignedIn() && existing().assigneeId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin() 
+        || (isSignedIn() && existing().assigneeId == request.auth.uid && incoming().status == 'signed_off' && incoming().diff(existing()).affectedKeys().hasOnly(['status']));
+      allow delete: if isAdmin();
+    }
+
+    // SERVICE REQUESTS
+    match /serviceRequests/{requestId} {
+      allow create: if true; // Public can inquire
+      allow read, update, delete: if isAdmin();
+    }
+
+    // PRODUCTS COLLECTION
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidProduct(incoming()) && isValidId(productId);
+      allow update: if isAdmin() 
+        && incoming().diff(existing()).affectedKeys().hasAny(['name', 'description', 'price', 'category', 'type'])
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+  }
+}
