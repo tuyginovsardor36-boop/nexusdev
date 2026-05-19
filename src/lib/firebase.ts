@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User as FirebaseUser, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -7,6 +7,16 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
+
+let cachedAccessToken: string | null = null;
+
+export const setAccessToken = (token: string | null) => {
+  cachedAccessToken = token;
+};
+
+export const getAccessToken = () => cachedAccessToken;
 
 export enum OperationType {
   CREATE = 'create',
@@ -57,6 +67,7 @@ export interface UserProfile {
   specialization?: string;
   education?: string;
   completedProjectsCount?: number;
+  lastRequestAt?: any;
   createdAt: any;
   updatedAt: any;
 }
@@ -82,7 +93,7 @@ export interface ServiceRequest {
   createdAt: any;
 }
 
-export async function submitServiceRequest(request: Omit<ServiceRequest, 'id' | 'createdAt' | 'status'>) {
+export async function submitServiceRequest(request: Omit<ServiceRequest, 'id' | 'createdAt' | 'status'>, userId?: string) {
   const ref = doc(collection(db, 'serviceRequests'));
   try {
     await setDoc(ref, {
@@ -91,6 +102,14 @@ export async function submitServiceRequest(request: Omit<ServiceRequest, 'id' | 
       status: 'new',
       createdAt: serverTimestamp(),
     });
+
+    if (userId) {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        lastRequestAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'serviceRequests');
   }
@@ -222,6 +241,15 @@ export async function updateProduct(id: string, data: Partial<Product>) {
   }
 }
 
+export async function updateServiceRequestStatus(id: string, status: ServiceRequest['status']) {
+  const ref = doc(db, 'serviceRequests', id);
+  try {
+    await updateDoc(ref, { status });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `serviceRequests/${id}`);
+  }
+}
+
 export async function deleteProduct(id: string) {
   const productRef = doc(db, 'products', id);
   try {
@@ -229,5 +257,30 @@ export async function deleteProduct(id: string) {
     await deleteDoc(productRef);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `products/${id}`);
+  }
+}
+
+export const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      cachedAccessToken = null;
+    } catch (error) {
+      console.error("Sign out error:", error);
+    }
+};
+
+export async function googleSignIn(): Promise<{ user: FirebaseUser; accessToken: string } | null> {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (!credential?.accessToken) {
+      throw new Error('Failed to get access token from Firebase Auth');
+    }
+
+    cachedAccessToken = credential.accessToken;
+    return { user: result.user, accessToken: cachedAccessToken };
+  } catch (error: any) {
+    console.error('Sign in error:', error);
+    throw error;
   }
 }
