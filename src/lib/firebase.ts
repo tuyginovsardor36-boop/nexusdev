@@ -119,6 +119,51 @@ export async function updateTaskStatus(id: string, status: Task['status']) {
   }
 }
 
+export interface SupportMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  isAdmin: boolean;
+  createdAt: any;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  userEmail: string;
+  action: string;
+  details: string;
+  createdAt: any;
+}
+
+export async function sendSupportMessage(msg: Omit<SupportMessage, 'id' | 'createdAt'>) {
+  const ref = doc(collection(db, 'supportMessages'));
+  try {
+    await setDoc(ref, {
+      ...msg,
+      id: ref.id,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'supportMessages');
+  }
+}
+
+export async function logActivity(log: Omit<ActivityLog, 'id' | 'createdAt'>) {
+  const ref = doc(collection(db, 'activityLogs'));
+  try {
+    await setDoc(ref, {
+      ...log,
+      id: ref.id,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    // Silently fail activity logging to not disrupt user experience
+    console.warn("Logging failed", error);
+  }
+}
+
 export async function syncUserProfile(user: FirebaseUser): Promise<UserProfile | null> {
   const userRef = doc(db, 'users', user.uid);
   try {

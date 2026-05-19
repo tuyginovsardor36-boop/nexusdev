@@ -1,9 +1,9 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Terminal, Shield, Zap, Globe, Github, ChevronRight, Codesandbox, ShoppingCart, Layers, User, X, CheckCircle2, LogOut, Settings, Users, Plus, Trash2, Edit3, LayoutDashboard, Clock, FileText, Send, Phone, MessageSquare, Briefcase, Award, GraduationCap, Link as LinkIcon, CheckCircle } from "lucide-react";
-import { useState, useEffect, ReactNode, MouseEvent } from "react";
-import { auth, googleProvider, syncUserProfile, UserProfile, db, addProduct, updateProduct, deleteProduct, Product, Task, ServiceRequest, submitServiceRequest, assignTask, updateTaskStatus } from "./lib/firebase";
+import { Terminal, Shield, Zap, Globe, Github, ChevronRight, Codesandbox, ShoppingCart, Layers, User, X, CheckCircle2, LogOut, Settings, Users, Plus, Trash2, Edit3, LayoutDashboard, Clock, FileText, Send, Phone, MessageSquare, Briefcase, Award, GraduationCap, Link as LinkIcon, CheckCircle, Activity, BarChart3, Users2, Eye, MousePointer2 } from "lucide-react";
+import { useState, useEffect, ReactNode, MouseEvent, useRef } from "react";
+import { auth, googleProvider, syncUserProfile, UserProfile, db, addProduct, updateProduct, deleteProduct, Product, Task, ServiceRequest, submitServiceRequest, assignTask, updateTaskStatus, sendSupportMessage, logActivity, SupportMessage, ActivityLog } from "./lib/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
-import { collection, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, where } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, where, limit } from "firebase/firestore";
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -25,6 +25,9 @@ export default function App() {
   const [isEditingProduct, setIsEditingProduct] = useState<Product | null>(null);
   const [isAssigningTask, setIsAssigningTask] = useState(false);
   const [selectedTeamMember, setSelectedTeamMember] = useState<UserProfile | null>(null);
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -86,6 +89,31 @@ export default function App() {
       return () => unsubscribe();
     }
   }, [profile]);
+  
+  // Fetch Support Messages
+  useEffect(() => {
+    if (profile) {
+      let q;
+      if (profile.role === 'owner' || profile.role === 'admin') {
+        q = query(collection(db, 'supportMessages'), orderBy('createdAt', 'asc'));
+      } else {
+        q = query(collection(db, 'supportMessages'), where('senderId', '==', profile.uid), orderBy('createdAt', 'asc'));
+      }
+      return onSnapshot(q, (snapshot) => {
+        setSupportMessages(snapshot.docs.map(doc => doc.data() as SupportMessage));
+      });
+    }
+  }, [profile]);
+
+  // Fetch Activity Logs (Owner Only)
+  useEffect(() => {
+    if (profile?.role === 'owner') {
+      const q = query(collection(db, 'activityLogs'), orderBy('createdAt', 'desc'), limit(50));
+      return onSnapshot(q, (snapshot) => {
+        setActivityLogs(snapshot.docs.map(doc => doc.data() as ActivityLog));
+      });
+    }
+  }, [profile]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -96,6 +124,14 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
       showToast("Access Granted: Authentication Successful");
+      if (auth.currentUser) {
+        logActivity({
+          userId: auth.currentUser.uid,
+          userEmail: auth.currentUser.email || 'anon',
+          action: 'LOGIN',
+          details: 'Node access authorized via Google Auth'
+        });
+      }
     } catch (error) {
       console.error("Login failed", error);
       showToast("Access Denied: Connection Error", 'error');
@@ -103,6 +139,14 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    if (user) {
+      logActivity({
+        userId: user.uid,
+        userEmail: user.email || 'anon',
+        action: 'LOGOUT',
+        details: 'Session manually terminated'
+      });
+    }
     signOut(auth);
     showToast("Session Terminated");
   };
@@ -237,7 +281,18 @@ export default function App() {
                     product={p} 
                     index={idx} 
                     onClick={() => setSelectedProduct(p)}
-                    onAddToCart={addToCart}
+                    onAddToCart={(e) => {
+                      e.stopPropagation();
+                      if (user) {
+                        logActivity({
+                          userId: user.uid,
+                          userEmail: user.email || 'anon',
+                          action: 'CART_ADD',
+                          details: `Added ${p.name} to cart`
+                        });
+                      }
+                      addToCart(p);
+                    }}
                   />
                 ))
               )}
@@ -321,6 +376,40 @@ export default function App() {
         </section>
       </main>
 
+      {/* Support Chat Floating Button */}
+      {user && (
+        <button 
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className={`fixed bottom-8 right-8 z-40 w-14 h-14 rounded-2xl flex items-center justify-center shadow-2xl transition-all duration-300 ${
+            isChatOpen ? 'bg-slate-900 border-2 border-blue-500 rotate-90 scale-110' : 'bg-blue-600 hover:bg-blue-700 -rotate-12 hover:rotate-0'
+          }`}
+        >
+          {isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}
+          {!isChatOpen && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
+          )}
+        </button>
+      )}
+
+      {/* Support Message Widget */}
+      <AnimatePresence>
+        {isChatOpen && user && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="fixed bottom-24 right-8 z-40 w-96 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col h-[500px]"
+          >
+            <SupportChat 
+              messages={supportMessages} 
+              user={user} 
+              profile={profile} 
+              onSendMessage={sendSupportMessage} 
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Footer />
 
       {/* Toast Notification */}
@@ -349,6 +438,7 @@ export default function App() {
               products={products} 
               tasks={tasks}
               serviceRequests={serviceRequests}
+              activityLogs={activityLogs}
               profile={profile}
               onClose={() => setShowDashboard(false)}
               onSetRole={setMemberRole}
@@ -451,6 +541,14 @@ export default function App() {
               onSubmit={async (data) => {
                 try {
                   await submitServiceRequest(data);
+                  if (user) {
+                    logActivity({
+                      userId: user.uid,
+                      userEmail: user.email || 'anon',
+                      action: 'PROJECT_REQ',
+                      details: `Submitted inquiry for ${data.projectType}`
+                    });
+                  }
                   showToast("Deployment Request Sent");
                   setShowConsultModal(false);
                 } catch (e) {
@@ -674,11 +772,12 @@ function Modal({ children, onClose, wide = false }: { children: ReactNode; onClo
   );
 }
 
-function AdminDashboard({ teamMembers, products, tasks, serviceRequests, profile, onClose, onSetRole, onEditProduct, onDeleteProduct, onOpenPortfolio }: {
+function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activityLogs, profile, onClose, onSetRole, onEditProduct, onDeleteProduct, onOpenPortfolio }: {
   teamMembers: UserProfile[];
   products: Product[];
   tasks: Task[];
   serviceRequests: ServiceRequest[];
+  activityLogs: ActivityLog[];
   profile: UserProfile | null;
   onClose: () => void;
   onSetRole: (uid: string, role: 'admin' | 'member') => void;
@@ -686,7 +785,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, profile
   onDeleteProduct: (id: string) => void;
   onOpenPortfolio: (m: UserProfile) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'products' | 'team' | 'tasks' | 'requests'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'team' | 'tasks' | 'requests' | 'insights'>('products');
 
   const stats = {
     totalAssets: products.length,
@@ -694,6 +793,9 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, profile
     pendingTasks: tasks.filter(t => t.status !== 'verified').length,
     newRequests: serviceRequests.filter(r => r.status === 'new').length
   };
+
+  const tabs = ['products', 'team', 'tasks', 'requests'];
+  if (profile?.role === 'owner') tabs.push('insights');
 
   return (
     <div className="flex flex-col gap-8">
@@ -703,7 +805,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, profile
           <p className="text-xs text-slate-400 uppercase font-mono tracking-widest mt-1">Strategic Operations Control</p>
         </div>
         <div className="flex bg-slate-100 rounded-xl p-1 font-bold text-[8px] uppercase tracking-[0.1em]">
-          {['products', 'team', 'tasks', 'requests'].map((tab) => (
+          {tabs.map((tab) => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -905,7 +1007,156 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, profile
             </div>
           </div>
         )}
+
+        {activeTab === 'insights' && profile?.role === 'owner' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-900 rounded-2xl p-6 text-white overflow-hidden relative">
+                <BarChart3 className="absolute -bottom-4 -right-4 w-32 h-32 opacity-10" />
+                <h4 className="text-sm font-bold uppercase tracking-widest font-mono opacity-60">System Traffic</h4>
+                <div className="text-4xl font-bold font-mono mt-2">{activityLogs.length * 7}<span className="text-xs opacity-40 ml-2">Request/min</span></div>
+                <div className="mt-4 flex gap-2">
+                  <span className="px-2 py-1 bg-green-500/20 text-green-400 text-[8px] font-bold rounded uppercase">Active Node_Alpha</span>
+                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-[8px] font-bold rounded uppercase">Pulse: Stable</span>
+                </div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl p-6">
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono mb-4">Node Latency (Global)</h4>
+                <div className="space-y-3">
+                  {['Tashkent', 'Frankfurt', 'Singapore'].map(loc => (
+                    <div key={loc} className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-600">{loc}</span>
+                      <div className="flex-1 mx-4 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-600 w-3/4 animate-pulse" />
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400">12ms</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-600" /> Live Feed (Owner Access Only)
+                </h3>
+                <span className="text-[8px] font-bold text-blue-600 animate-pulse uppercase">Syncing Real-time</span>
+              </div>
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {activityLogs.map(log => (
+                  <div key={log.id} className="flex items-start gap-4 p-3 bg-white rounded-xl border border-slate-100 group hover:border-blue-200 transition-all">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
+                      {log.action === 'LOGIN' ? <Eye className="w-4 h-4 text-green-500" /> : <MousePointer2 className="w-4 h-4 text-slate-400" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-bold text-slate-900 truncate">{log.userEmail}</span>
+                        <span className="text-[8px] font-mono text-slate-400">
+                          {log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleTimeString() : 'Recent'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[8px] font-bold uppercase py-0.5 px-1.5 bg-slate-100 text-slate-500 rounded">{log.action}</span>
+                        <p className="text-[10px] text-slate-500 truncate">{log.details}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function SupportChat({ messages, user, profile, onSendMessage }: { 
+  messages: SupportMessage[]; 
+  user: FirebaseUser; 
+  profile: UserProfile | null;
+  onSendMessage: (msg: any) => Promise<void>;
+}) {
+  const [inputText, setInputText] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
+    
+    await onSendMessage({
+      senderId: user.uid,
+      senderName: profile?.displayName || user.displayName || 'Anon Node',
+      text: inputText,
+      isAdmin: profile?.role === 'owner' || profile?.role === 'admin'
+    });
+    setInputText('');
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      <div className="bg-slate-900 p-4 text-white flex items-center justify-between border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <MessageSquare className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest">Nexus Support</div>
+            <div className="text-[8px] font-mono text-blue-400 animate-pulse uppercase">Lead Engineers Online</div>
+          </div>
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-center px-6">
+            <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mb-4 text-slate-300">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Session Initiated</p>
+            <p className="text-[10px] text-slate-400 mt-2">Connecting to lead engineers. How can we help you today?</p>
+          </div>
+        )}
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex flex-col ${msg.senderId === user.uid ? 'items-end' : 'items-start'}`}>
+            <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-xs ${
+              msg.senderId === user.uid 
+                ? 'bg-blue-600 text-white rounded-tr-none shadow-lg shadow-blue-100' 
+                : 'bg-white text-slate-900 border border-slate-100 rounded-tl-none shadow-sm'
+            }`}>
+              {msg.text}
+            </div>
+            <span className="text-[8px] font-bold text-slate-400 uppercase mt-1 px-1">
+              {msg.senderName} • {msg.createdAt?.seconds ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString() : 'Pending'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={handleSend} className="p-4 border-t border-slate-100 bg-white shadow-xl">
+        <div className="flex gap-2">
+          <input 
+            type="text" 
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            placeholder="Secure message link..."
+            className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all font-medium"
+          />
+          <button 
+            type="submit"
+            className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

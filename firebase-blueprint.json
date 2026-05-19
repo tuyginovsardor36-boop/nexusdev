@@ -52,6 +52,32 @@
       },
       "required": ["customerName", "customerContact", "projectType", "description", "status", "createdAt"]
     },
+    "SupportMessage": {
+      "title": "SupportMessage",
+      "description": "Real-time support chat messages.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "UserActivity": {
+      "title": "UserActivity",
+      "description": "Logs of user actions for owner monitoring.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
     "Product": {
       "title": "Product",
       "description": "An SDK, template, or service listed on the marketplace.",
@@ -85,6 +111,14 @@
     "/serviceRequests/{requestId}": {
       "schema": "ServiceRequest",
       "description": "Client project inquiries."
+    },
+    "/supportMessages/{messageId}": {
+      "schema": "SupportMessage",
+      "description": "Chat log."
+    },
+    "/activityLogs/{logId}": {
+      "schema": "UserActivity",
+      "description": "Admin activity stream."
     }
   }
 }

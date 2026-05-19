@@ -113,6 +113,20 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    // SUPPORT MESSAGES
+    match /supportMessages/{messageId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.senderId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // ACTIVITY LOGS
+    match /activityLogs/{logId} {
+      allow create: if isSignedIn(); // Users log their own actions (or we log them via code)
+      allow read: if isOwner();
+      allow update, delete: if false;
+    }
+
     // PRODUCTS COLLECTION
     match /products/{productId} {
       allow read: if true;
