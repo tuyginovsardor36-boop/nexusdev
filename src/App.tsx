@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "motion/react";
 import { Terminal, Shield, Zap, Globe, Github, ChevronRight, Codesandbox, ShoppingCart, Layers, User, X, CheckCircle2, LogOut, Settings, Users, Plus, Trash2, Edit3, LayoutDashboard, Clock, FileText, Send, Phone, MessageSquare, Briefcase, Award, GraduationCap, Link as LinkIcon, CheckCircle, Activity, BarChart3, Users2, Eye, MousePointer2 } from "lucide-react";
-import { useState, useEffect, ReactNode, MouseEvent, useRef } from "react";
+import { useState, useEffect, ReactNode, MouseEvent, useRef, FormEvent } from "react";
 import { auth, googleProvider, syncUserProfile, UserProfile, db, addProduct, updateProduct, deleteProduct, Product, Task, ServiceRequest, submitServiceRequest, assignTask, updateTaskStatus, sendSupportMessage, logActivity, SupportMessage, ActivityLog } from "./lib/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp, query, orderBy, where, limit } from "firebase/firestore";
@@ -18,7 +18,8 @@ export default function App() {
   // Auth & Admin State
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [showDashboard, setShowDashboard] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showTeamConsole, setShowTeamConsole] = useState(false);
   const [teamMembers, setTeamMembers] = useState<UserProfile[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
@@ -123,18 +124,18 @@ export default function App() {
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
-      showToast("Access Granted: Authentication Successful");
+      showToast("Kirish ruxsat etildi: Autentifikatsiya muvaffaqiyatli");
       if (auth.currentUser) {
         logActivity({
           userId: auth.currentUser.uid,
-          userEmail: auth.currentUser.email || 'anon',
-          action: 'LOGIN',
-          details: 'Node access authorized via Google Auth'
+          userEmail: auth.currentUser.email || 'anonim',
+          action: 'KIRISH',
+          details: "Google Auth orqali tizimga kirildi"
         });
       }
     } catch (error) {
       console.error("Login failed", error);
-      showToast("Access Denied: Connection Error", 'error');
+      showToast("Kirish rad etildi: Ulashish hatosi", 'error');
     }
   };
 
@@ -142,13 +143,13 @@ export default function App() {
     if (user) {
       logActivity({
         userId: user.uid,
-        userEmail: user.email || 'anon',
-        action: 'LOGOUT',
-        details: 'Session manually terminated'
+        userEmail: user.email || 'anonim',
+        action: 'CHIQISH',
+        details: "Sessiya qo'lda yakunlandi"
       });
     }
     signOut(auth);
-    showToast("Session Terminated");
+    showToast("Sessiya yakunlandi");
   };
 
   const setMemberRole = async (uid: string, newRole: 'admin' | 'member') => {
@@ -159,17 +160,17 @@ export default function App() {
         role: newRole,
         updatedAt: serverTimestamp()
       });
-      showToast(`Privileges Updated: ${newRole.toUpperCase()}`);
+      showToast(`Huquqlar yangilandi: ${newRole === 'admin' ? 'ADMIN' : "A'ZO"}`);
     } catch (error) {
       console.error("Update role failed", error);
-      showToast("Internal Error: Role update failed", 'error');
+      showToast("Ichki xato: Huquqlarni yangilab bo'lmadi", 'error');
     }
   };
 
   const addToCart = (e: MouseEvent) => {
     e.stopPropagation();
     setCartCount(prev => prev + 1);
-    showToast("Asset Cached: Added to checkout");
+    showToast("Aktiv keshlandi: Savatga qo'shildi");
   };
 
   const filteredProducts = products.filter(p => {
@@ -181,55 +182,56 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-slate-900 overflow-hidden select-none">
-      <Navbar 
-        cartCount={cartCount} 
-        user={user}
-        profile={profile}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
-        onStartProject={() => setShowConsultModal(true)}
-        onOpenDashboard={() => setShowDashboard(true)}
-      />
+        <Navbar 
+          cartCount={cartCount} 
+          user={user}
+          profile={profile}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
+          onStartProject={() => setShowConsultModal(true)}
+          onOpenAdmin={() => setShowAdminPanel(true)}
+          onOpenConsole={() => setShowTeamConsole(true)}
+        />
 
       <main className="flex-1 overflow-hidden grid grid-cols-12 gap-px bg-slate-200">
         {/* Left Panel: Directory & Filters */}
         <section className="col-span-3 bg-white p-6 flex flex-col gap-6 overflow-y-auto">
           <div>
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Engineering Categories</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Muhandislik Kategoriyalari</h3>
             <div className="space-y-1">
-              <CategoryItem label="All Solutions" count={products.length} active={selectedCategory === "all"} onClick={() => setSelectedCategory("all")} />
-              <CategoryItem label="Core Infrastructure" count={products.filter(p => p.category === "Core Infrastructure").length} active={selectedCategory === "Core Infrastructure"} onClick={() => setSelectedCategory("Core Infrastructure")} />
-              <CategoryItem label="Authentication SDKs" count={products.filter(p => p.category === "Authentication SDKs").length} active={selectedCategory === "Authentication SDKs"} onClick={() => setSelectedCategory("Authentication SDKs")} />
-              <CategoryItem label="Data Orchestration" count={products.filter(p => p.category === "Data Orchestration").length} active={selectedCategory === "Data Orchestration"} onClick={() => setSelectedCategory("Data Orchestration")} />
-              <CategoryItem label="Cloud Automation" count={products.filter(p => p.category === "Cloud Automation").length} active={selectedCategory === "Cloud Automation"} onClick={() => setSelectedCategory("Cloud Automation")} />
+              <CategoryItem label="Barcha yechimlar" count={products.length} active={selectedCategory === "all"} onClick={() => setSelectedCategory("all")} />
+              <CategoryItem label="Asosiy infratuzilma" count={products.filter(p => p.category === "Core Infrastructure").length} active={selectedCategory === "Core Infrastructure"} onClick={() => setSelectedCategory("Core Infrastructure")} />
+              <CategoryItem label="Autentifikatsiya SDK'lari" count={products.filter(p => p.category === "Authentication SDKs").length} active={selectedCategory === "Authentication SDKs"} onClick={() => setSelectedCategory("Authentication SDKs")} />
+              <CategoryItem label="Ma'lumotlar orkestratsiyasi" count={products.filter(p => p.category === "Data Orchestration").length} active={selectedCategory === "Data Orchestration"} onClick={() => setSelectedCategory("Data Orchestration")} />
+              <CategoryItem label="Bulutli avtomatlashtirish" count={products.filter(p => p.category === "Cloud Automation").length} active={selectedCategory === "Cloud Automation"} onClick={() => setSelectedCategory("Cloud Automation")} />
             </div>
           </div>
 
           <div>
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Team Availability</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Jamoa Holati</h3>
             <div className="flex flex-col gap-4">
               <AvailabilityCard 
                 status="online" 
-                title="Custom Development" 
-                description="Accepting requests for Q3-2024. Next slot: 14 days." 
+                title="Maxsus ishlab chiqish" 
+                description="Loyihalar qabul qilinmoqda. Navbat: 14 kun." 
               />
               <AvailabilityCard 
                 status="busy" 
-                title="Security Audits" 
-                description="Limited capacity. Consultations for enterprise only." 
+                title="Xavfsizlik auditi" 
+                description="Hozirda band. Faqat korporativ mijozlar uchun." 
               />
             </div>
           </div>
 
           <div className="mt-auto">
             <div className="p-4 bg-slate-900 rounded-lg text-white">
-              <p className="text-[10px] font-bold text-blue-400 uppercase mb-1 font-mono">Partner Network</p>
-              <p className="text-xs opacity-70 mb-3">Join our team of 24+ specialized engineers.</p>
+              <p className="text-[10px] font-bold text-blue-400 uppercase mb-1 font-mono">Hamkorlar tarmog'i</p>
+              <p className="text-xs opacity-70 mb-3">24+ ixtisoslashgan muhandislar jamoasiga qo'shiling.</p>
               <button 
                 onClick={() => setShowConsultModal(true)}
                 className="w-full py-2 border border-white/20 rounded text-[10px] font-bold uppercase tracking-wider hover:bg-white/10 transition-colors"
               >
-                Apply to Nexus
+                Nexus'ga qo'shiling
               </button>
             </div>
           </div>
@@ -239,8 +241,8 @@ export default function App() {
         <section className="col-span-6 bg-slate-50 p-8 flex flex-col overflow-y-auto">
           <div className="flex justify-between items-center mb-8 gap-4">
             <div className="flex-1">
-              <h1 className="text-3xl font-light tracking-tight text-slate-800 shrink-0">Elite <span className="font-bold">Marketplace</span></h1>
-              <p className="text-sm text-slate-500 whitespace-nowrap">Production-ready modules for world-class teams.</p>
+              <h1 className="text-3xl font-light tracking-tight text-slate-800 shrink-0">Elita <span className="font-bold">Bozori</span></h1>
+              <p className="text-sm text-slate-500 whitespace-nowrap">Professional jamoalar uchun tayyor modullar.</p>
             </div>
             
             <div className="flex-1 max-w-sm relative group">
@@ -249,7 +251,7 @@ export default function App() {
               </div>
               <input 
                 type="text" 
-                placeholder="Search repository..." 
+                placeholder="Qidiruv..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm"
@@ -257,8 +259,8 @@ export default function App() {
             </div>
 
             <div className="flex border border-slate-200 rounded overflow-hidden shadow-sm shrink-0">
-              <button className="px-4 py-2 bg-white text-xs font-bold border-r border-slate-200 hover:bg-slate-50 transition-colors">GRID</button>
-              <button className="px-4 py-2 bg-slate-100 text-xs text-slate-400 hover:bg-slate-200 transition-colors">LIST</button>
+              <button className="px-4 py-2 bg-white text-xs font-bold border-r border-slate-200 hover:bg-slate-50 transition-colors">TO'R</button>
+              <button className="px-4 py-2 bg-slate-100 text-xs text-slate-400 hover:bg-slate-200 transition-colors">RO'YXAT</button>
             </div>
           </div>
 
@@ -286,9 +288,9 @@ export default function App() {
                       if (user) {
                         logActivity({
                           userId: user.uid,
-                          userEmail: user.email || 'anon',
-                          action: 'CART_ADD',
-                          details: `Added ${p.name} to cart`
+                          userEmail: user.email || 'anonim',
+                          action: 'SAVATGA_QOSHISH',
+                          details: `${p.name} savatga qo'shildi`
                         });
                       }
                       addToCart(p);
@@ -307,16 +309,16 @@ export default function App() {
                  <Codesandbox className="w-48 h-48" />
                </div>
               <div className="flex-1 relative z-10">
-                <h3 className="text-lg font-bold mb-1">Hire Our Core Team</h3>
-                <p className="text-sm opacity-80 mb-4">Dedicated full-stack execution for complex SaaS architectures and legacy migrations.</p>
+                <h3 className="text-lg font-bold mb-1">Asosiy jamoamizni yollang</h3>
+                <p className="text-sm opacity-80 mb-4">Murakkab SaaS arxitekturalari va tizimlarni ko'chirish bo'yicha professional ijro.</p>
                 <div className="flex gap-4">
                   <button 
                     onClick={() => setShowConsultModal(true)}
                     className="bg-white text-blue-600 px-4 py-2 rounded font-bold text-xs uppercase tracking-wide hover:bg-slate-100 transition-colors"
                   >
-                    Consultancy
+                    Konsultatsiya
                   </button>
-                  <button className="border border-white/30 px-4 py-2 rounded font-bold text-xs uppercase tracking-wide hover:bg-white/10 transition-colors">Case Studies</button>
+                  <button className="border border-white/30 px-4 py-2 rounded font-bold text-xs uppercase tracking-wide hover:bg-white/10 transition-colors">Muvaffaqiyatlar</button>
                 </div>
               </div>
               <div className="w-24 h-24 opacity-20 hidden md:block relative z-10">
@@ -332,8 +334,8 @@ export default function App() {
             <div className="absolute top-0 right-0 p-4 opacity-10">
               <MessageSquare className="w-20 h-20 rotate-12" />
             </div>
-            <h3 className="text-lg font-bold mb-2">Direct Contact</h3>
-            <p className="text-xs opacity-70 mb-4 font-mono uppercase tracking-[0.1em]">Lead Engineer Available</p>
+            <h3 className="text-lg font-bold mb-2">Bog'lanish</h3>
+            <p className="text-xs opacity-70 mb-4 font-mono uppercase tracking-[0.1em]">Muhandis onlayn</p>
             <div className="space-y-3">
               <a href="https://t.me/mr1s_tuyginov" className="flex items-center gap-3 bg-white/10 hover:bg-white/20 p-2 rounded-xl transition-all">
                 <Send className="w-4 h-4 text-blue-400" />
@@ -348,19 +350,19 @@ export default function App() {
               onClick={() => setShowConsultModal(true)}
               className="w-full mt-6 bg-blue-600 hover:bg-blue-700 py-3 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-blue-900"
             >
-              Order Service
+              Xizmat buyurtma qilish
             </button>
           </div>
 
-          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Recent Deliveries</h3>
+          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Oxirgi yetkazib berishlar</h3>
           <div className="space-y-4 mb-8">
-            <DeliveryItem color="bg-green-500" title="Fintech Portal V2" subtitle="Custom Build • 12 days ago" />
-            <DeliveryItem color="bg-blue-500" title="Vector DB SDK" subtitle="SDK Release • 2 days ago" />
-            <DeliveryItem color="bg-slate-200" title="E-commerce Engine" subtitle="Maintenance • Ongoing" />
+            <DeliveryItem color="bg-green-500" title="Fintech Portal V2" subtitle="Maxsus qurilish • 12 kun oldin" />
+            <DeliveryItem color="bg-blue-500" title="Vector DB SDK" subtitle="SDK Reliz • 2 kun oldin" />
+            <DeliveryItem color="bg-slate-200" title="E-commerce Engine" subtitle="Texnik xizmat • Davom etmoqda" />
           </div>
 
           <div className="mt-auto border-t border-slate-100 pt-6">
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Active Dev Sessions</h3>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 font-mono">Faol muhandislik seanslari</h3>
             <div className="grid grid-cols-4 gap-2">
               {teamMembers.slice(0, 4).map((m, i) => (
                 <div key={i} title={m.displayName} className="relative">
@@ -371,7 +373,7 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 mt-3 italic">*{teamMembers.length} leads currently on-duty</p>
+            <p className="text-[10px] text-slate-400 mt-3 italic">*{teamMembers.length} ta mutaxassis navbatchilikda</p>
           </div>
         </section>
       </main>
@@ -431,19 +433,28 @@ export default function App() {
 
       {/* Modals */}
       <AnimatePresence>
-        {showDashboard && (
-          <Modal onClose={() => setShowDashboard(false)} wide>
-            <AdminDashboard 
-              teamMembers={teamMembers} 
+        {showAdminPanel && (
+          <Modal onClose={() => setShowAdminPanel(false)} wide>
+            <AdminPanel 
               products={products} 
-              tasks={tasks}
               serviceRequests={serviceRequests}
               activityLogs={activityLogs}
               profile={profile}
-              onClose={() => setShowDashboard(false)}
-              onSetRole={setMemberRole}
+              onClose={() => setShowAdminPanel(false)}
               onEditProduct={(p) => setIsEditingProduct(p)}
               onDeleteProduct={deleteProduct}
+            />
+          </Modal>
+        )}
+
+        {showTeamConsole && (
+          <Modal onClose={() => setShowTeamConsole(false)} wide>
+            <TeamConsole 
+              teamMembers={teamMembers} 
+              tasks={tasks}
+              profile={profile}
+              onClose={() => setShowTeamConsole(false)}
+              onSetRole={setMemberRole}
               onOpenPortfolio={(m) => setSelectedTeamMember(m)}
             />
           </Modal>
@@ -463,14 +474,14 @@ export default function App() {
                 try {
                   if (isEditingProduct.id === 'new') {
                     await addProduct({ ...data, authorId: user?.uid || '' });
-                    showToast("Asset Initialized: Success");
+                    showToast("Aktiv yaratildi: Muvaffaqiyatli");
                   } else {
                     await updateProduct(isEditingProduct.id, data);
-                    showToast("Asset Synchronized: Success");
+                    showToast("Aktiv sinxronlandi: Muvaffaqiyatli");
                   }
                   setIsEditingProduct(null);
                 } catch (e) {
-                  showToast("Deployment Failed: Write error", 'error');
+                  showToast("O'rnatish muvaffaqiyatsiz tugadi: Yozish xatosi", 'error');
                 }
               }}
               onCancel={() => setIsEditingProduct(null)}
@@ -544,15 +555,15 @@ export default function App() {
                   if (user) {
                     logActivity({
                       userId: user.uid,
-                      userEmail: user.email || 'anon',
-                      action: 'PROJECT_REQ',
-                      details: `Submitted inquiry for ${data.projectType}`
+                      userEmail: user.email || 'anonim',
+                      action: 'LOYIHA_SOROVI',
+                      details: `${data.projectType} uchun so'rov yuborildi`
                     });
                   }
-                  showToast("Deployment Request Sent");
+                  showToast("O'rnatish so'rovi yuborildi");
                   setShowConsultModal(false);
                 } catch (e) {
-                  showToast("Inquiry Failed", 'error');
+                  showToast("So'rov yuborishda xato", 'error');
                 }
               }} 
               onCancel={() => setShowConsultModal(false)} 
@@ -564,14 +575,15 @@ export default function App() {
   );
 }
 
-function Navbar({ cartCount, user, profile, onLogin, onLogout, onStartProject, onOpenDashboard }: { 
+function Navbar({ cartCount, user, profile, onLogin, onLogout, onStartProject, onOpenAdmin, onOpenConsole }: { 
   cartCount: number; 
   user: FirebaseUser | null;
   profile: UserProfile | null;
   onLogin: () => void;
   onLogout: () => void;
   onStartProject: () => void;
-  onOpenDashboard: () => void;
+  onOpenAdmin: () => void;
+  onOpenConsole: () => void;
 }) {
   return (
     <nav className="h-16 border-b border-slate-200 bg-white px-8 flex items-center justify-between z-10 shrink-0 shadow-sm relative font-sans">
@@ -584,14 +596,19 @@ function Navbar({ cartCount, user, profile, onLogin, onLogout, onStartProject, o
         </div>
         <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
         <div className="hidden md:flex gap-6 text-sm font-medium text-slate-500 uppercase tracking-widest">
-          <a href="#" className="text-blue-600 border-b-2 border-blue-600 pb-0.5">Solutions</a>
-          <a href="#" className="hover:text-slate-900 transition-colors">SDK Registry</a>
+          <a href="#" className="text-blue-600 border-b-2 border-blue-600 pb-0.5">Yechimlar</a>
+          <a href="#" className="hover:text-slate-900 transition-colors">SDK Reyestri</a>
           {(profile?.role === 'owner' || profile?.role === 'admin') && (
-            <button onClick={onOpenDashboard} className="flex items-center gap-2 hover:text-blue-600 transition-colors uppercase tracking-widest font-bold">
-              <LayoutDashboard className="w-4 h-4" /> Dashboard
-            </button>
+            <>
+              <button onClick={onOpenAdmin} className="flex items-center gap-2 hover:text-blue-600 transition-colors uppercase tracking-widest font-bold">
+                <LayoutDashboard className="w-4 h-4" /> Admin
+              </button>
+              <button onClick={onOpenConsole} className="flex items-center gap-2 hover:text-blue-600 transition-colors uppercase tracking-widest font-bold">
+                <Settings className="w-4 h-4" /> Konsol
+              </button>
+            </>
           )}
-          <a href="#" className="hover:text-slate-900 transition-colors">Client Portal</a>
+          <a href="#" className="hover:text-slate-900 transition-colors">Mijoz Portali</a>
         </div>
       </div>
       <div className="flex items-center gap-4">
@@ -611,7 +628,7 @@ function Navbar({ cartCount, user, profile, onLogin, onLogout, onStartProject, o
                 {profile?.displayName?.slice(0, 1).toUpperCase() || 'U'}
               </div>
               <div className="text-[10px] font-bold uppercase tracking-tighter">
-                {profile?.role || 'Guest'}
+                {profile?.role === 'owner' ? 'EGA' : profile?.role === 'admin' ? 'ADMIN' : "A'ZO"}
               </div>
               <button onClick={onLogout} className="ml-2 text-slate-400 hover:text-red-500 transition-colors">
                 <LogOut className="w-4 h-4" />
@@ -621,7 +638,7 @@ function Navbar({ cartCount, user, profile, onLogin, onLogout, onStartProject, o
               onClick={onStartProject}
               className="bg-slate-900 text-white px-5 py-2 text-[10px] font-bold uppercase tracking-wider rounded hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
             >
-              Start Project
+              Loyihani Boshlash
             </button>
           </div>
         ) : (
@@ -629,7 +646,7 @@ function Navbar({ cartCount, user, profile, onLogin, onLogout, onStartProject, o
             onClick={onLogin}
             className="bg-blue-600 text-white px-5 py-2 text-[10px] font-bold uppercase tracking-wider rounded hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100 flex items-center gap-2"
           >
-            <User className="w-4 h-4" /> Sign In
+            <User className="w-4 h-4" /> Kirish
           </button>
         )}
       </div>
@@ -772,37 +789,37 @@ function Modal({ children, onClose, wide = false }: { children: ReactNode; onClo
   );
 }
 
-function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activityLogs, profile, onClose, onSetRole, onEditProduct, onDeleteProduct, onOpenPortfolio }: {
-  teamMembers: UserProfile[];
+function AdminPanel({ products, serviceRequests, activityLogs, profile, onClose, onEditProduct, onDeleteProduct }: {
   products: Product[];
-  tasks: Task[];
   serviceRequests: ServiceRequest[];
   activityLogs: ActivityLog[];
   profile: UserProfile | null;
   onClose: () => void;
-  onSetRole: (uid: string, role: 'admin' | 'member') => void;
   onEditProduct: (p: Product) => void;
   onDeleteProduct: (id: string) => void;
-  onOpenPortfolio: (m: UserProfile) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'products' | 'team' | 'tasks' | 'requests' | 'insights'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'requests' | 'insights'>('products');
 
   const stats = {
     totalAssets: products.length,
-    teamSize: teamMembers.length,
-    pendingTasks: tasks.filter(t => t.status !== 'verified').length,
     newRequests: serviceRequests.filter(r => r.status === 'new').length
   };
 
-  const tabs = ['products', 'team', 'tasks', 'requests'];
+  const tabs = ['products', 'requests'];
   if (profile?.role === 'owner') tabs.push('insights');
+
+  const tabLabels: Record<string, string> = {
+    products: 'Inventar',
+    requests: "So'rovlar",
+    insights: 'Tahlillar'
+  };
 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Nexus <span className="text-blue-600">Console</span></h2>
-          <p className="text-xs text-slate-400 uppercase font-mono tracking-widest mt-1">Strategic Operations Control</p>
+          <h2 className="text-3xl font-bold tracking-tight">Nexus <span className="text-blue-600">Admin</span></h2>
+          <p className="text-xs text-slate-400 uppercase font-mono tracking-widest mt-1">Tizimni boshqarish paneli</p>
         </div>
         <div className="flex bg-slate-100 rounded-xl p-1 font-bold text-[8px] uppercase tracking-[0.1em]">
           {tabs.map((tab) => (
@@ -811,19 +828,16 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
               onClick={() => setActiveTab(tab as any)}
               className={`px-4 py-2 rounded-lg transition-all ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              {tab}
+              {tabLabels[tab]}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Stats Hub */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         {[
-          { label: 'Total Assets', value: stats.totalAssets, icon: Layers, color: 'text-blue-600' },
-          { label: 'Active Team', value: stats.teamSize, icon: Users, color: 'text-indigo-600' },
-          { label: 'Pending Tasks', value: stats.pendingTasks, icon: Clock, color: 'text-amber-600' },
-          { label: 'New Inquiries', value: stats.newRequests, icon: MessageSquare, color: 'text-green-600' }
+          { label: 'Jami Aktivlar', value: stats.totalAssets, icon: Layers, color: 'text-blue-600' },
+          { label: "Yangi So'rovlar", value: stats.newRequests, icon: MessageSquare, color: 'text-green-600' }
         ].map((s, i) => (
           <div key={i} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
             <div className="flex items-center justify-between mb-2">
@@ -839,12 +853,12 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
         {activeTab === 'products' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Marketplace Inventory</h3>
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Bozordagi Inventar</h3>
               <button 
                 onClick={() => onEditProduct({ id: 'new', name: '', description: '', price: 0, category: 'Core Infrastructure', type: 'SDK', authorId: '', createdAt: null })}
                 className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
               >
-                <Plus className="w-4 h-4" /> Add Asset
+                <Plus className="w-4 h-4" /> Aktiv qo'shish
               </button>
             </div>
             
@@ -863,7 +877,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
                   <div className="flex items-center gap-6">
                     <div className="text-right">
                       <div className="text-sm font-bold text-blue-600 font-mono">${p.price}</div>
-                      <div className="text-[8px] text-slate-400 uppercase tracking-widest">Pricing Model</div>
+                      <div className="text-[8px] text-slate-400 uppercase tracking-widest">Narxlash modeli</div>
                     </div>
                     <div className="flex gap-1">
                       <button onClick={() => onEditProduct(p)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all"><Edit3 className="w-4 h-4" /></button>
@@ -876,9 +890,125 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
           </div>
         )}
 
+        {activeTab === 'requests' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Mijozlar So'rovlari</h3>
+            <div className="grid grid-cols-1 gap-3">
+              {serviceRequests.map(req => (
+                <div key={req.id} className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="text-sm font-bold">{req.customerName}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{req.customerContact}</div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
+                      req.status === 'accepted' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
+                    }`}>
+                      {req.projectType} • {req.status === 'new' ? 'YANGI' : req.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-2 p-2 bg-white rounded border border-slate-100">{req.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'insights' && profile?.role === 'owner' && (
+          <div className="space-y-6">
+            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-600" /> Jonli tasma (Faqat Ega uchun)
+                </h3>
+                <span className="text-[8px] font-bold text-blue-600 animate-pulse uppercase">Real-vaqt sinxronizatsiyasi</span>
+              </div>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {activityLogs.map(log => (
+                  <div key={log.id} className="flex items-start gap-4 p-3 bg-white rounded-xl border border-slate-100 group hover:border-blue-200 transition-all">
+                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
+                      {log.action === 'LOGIN' ? <Eye className="w-4 h-4 text-green-500" /> : <MousePointer2 className="w-4 h-4 text-slate-400" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-bold text-slate-900 truncate">{log.userEmail}</span>
+                        <span className="text-[8px] font-mono text-slate-400">
+                          {log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleTimeString() : 'Hozirgina'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[8px] font-bold uppercase py-0.5 px-1.5 bg-slate-100 text-slate-500 rounded">{log.action === 'LOGIN' ? 'KIRISH' : log.action === 'LOGOUT' ? 'CHIQISH' : log.action}</span>
+                        <p className="text-[10px] text-slate-500 truncate">{log.details}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TeamConsole({ teamMembers, tasks, profile, onClose, onSetRole, onOpenPortfolio }: {
+  teamMembers: UserProfile[];
+  tasks: Task[];
+  profile: UserProfile | null;
+  onClose: () => void;
+  onSetRole: (uid: string, role: 'admin' | 'member') => void;
+  onOpenPortfolio: (m: UserProfile) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<'team' | 'tasks'>('team');
+
+  const stats = {
+    teamSize: teamMembers.length,
+    pendingTasks: tasks.filter(t => t.status !== 'verified').length,
+  };
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Nexus <span className="text-blue-600">Konsoli</span></h2>
+          <p className="text-xs text-slate-400 uppercase font-mono tracking-widest mt-1">Muhandislik operatsiyalari</p>
+        </div>
+        <div className="flex bg-slate-100 rounded-xl p-1 font-bold text-[8px] uppercase tracking-[0.1em]">
+          <button 
+            onClick={() => setActiveTab('team')}
+            className={`px-4 py-2 rounded-lg transition-all ${activeTab === 'team' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            Muhandislar
+          </button>
+          <button 
+            onClick={() => setActiveTab('tasks')}
+            className={`px-4 py-2 rounded-lg transition-all ${activeTab === 'tasks' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            Vazifalar
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {[
+          { label: 'Faol Jamoa', value: stats.teamSize, icon: Users, color: 'text-indigo-600' },
+          { label: 'Kutilayotgan Vazifalar', value: stats.pendingTasks, icon: Clock, color: 'text-amber-600' }
+        ].map((s, i) => (
+          <div key={i} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+            <div className="flex items-center justify-between mb-2">
+              <s.icon className={`w-4 h-4 ${s.color}`} />
+            </div>
+            <div className="text-2xl font-bold font-mono">{s.value}</div>
+            <div className="text-[9px] font-bold text-slate-400 uppercase mt-1">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="min-h-[400px]">
         {activeTab === 'team' && (
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Engineering Roster</h3>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Muhandislar Ro'yxati</h3>
             <div className="grid grid-cols-1 gap-3">
               {teamMembers.map(member => (
                 <div key={member.uid} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -908,7 +1038,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
                       member.role === 'owner' ? 'bg-blue-100 text-blue-600' : 
                       member.role === 'admin' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'
                     }`}>
-                      {member.role}
+                      {member.role === 'owner' ? 'EGA' : member.role === 'admin' ? 'ADMIN' : "A'ZO"}
                     </span>
                     {profile?.role === 'owner' && member.role !== 'owner' && (
                       <select 
@@ -916,7 +1046,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
                         onChange={(e) => onSetRole(member.uid, e.target.value as any)}
                         className="bg-white border border-slate-200 text-[10px] font-bold rounded-lg px-2 py-1 outline-none focus:border-blue-500 shadow-sm"
                       >
-                        <option value="member">MEMBER</option>
+                        <option value="member">A'ZO</option>
                         <option value="admin">ADMIN</option>
                       </select>
                     )}
@@ -930,10 +1060,10 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
         {activeTab === 'tasks' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Active Tasks</h3>
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Faol Vazifalar</h3>
               {(profile?.role === 'owner' || profile?.role === 'admin') && (
                 <button className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-colors">
-                  <Plus className="w-4 h-4" /> New Task
+                  <Plus className="w-4 h-4" /> Yangi Vazifa
                 </button>
               )}
             </div>
@@ -946,7 +1076,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
                       task.status === 'verified' ? 'bg-green-100 text-green-600' : 
                       task.status === 'signed_off' ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-500'
                     }`}>
-                      {task.status.replace('_', ' ')}
+                      {task.status === 'pending' ? 'KUTILMOQDA' : task.status === 'signed_off' ? 'BAJARILDI' : 'TASDIQLANDI'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mb-3">{task.description}</p>
@@ -964,7 +1094,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
                             onClick={() => updateTaskStatus(task.id, 'signed_off')}
                             className="bg-blue-600 text-white px-3 py-1 rounded text-[8px] font-bold uppercase hover:bg-blue-700"
                           >
-                            Sign Off
+                            Imzolash
                           </button>
                         )}
                         {task.status === 'signed_off' && (profile?.role === 'owner' || profile?.role === 'admin') && (
@@ -972,7 +1102,7 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
                             onClick={() => updateTaskStatus(task.id, 'verified')}
                             className="bg-green-600 text-white px-3 py-1 rounded text-[8px] font-bold uppercase hover:bg-green-700"
                           >
-                            Verify Task
+                            Tasdiqlash
                           </button>
                         )}
                       </div>
@@ -980,90 +1110,6 @@ function AdminDashboard({ teamMembers, products, tasks, serviceRequests, activit
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'requests' && (
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono">Client Inquiries</h3>
-            <div className="grid grid-cols-1 gap-3">
-              {serviceRequests.map(req => (
-                <div key={req.id} className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <div className="text-sm font-bold">{req.customerName}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{req.customerContact}</div>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase ${
-                      req.status === 'accepted' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'
-                    }`}>
-                      {req.projectType} • {req.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2 p-2 bg-white rounded border border-slate-100">{req.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'insights' && profile?.role === 'owner' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-900 rounded-2xl p-6 text-white overflow-hidden relative">
-                <BarChart3 className="absolute -bottom-4 -right-4 w-32 h-32 opacity-10" />
-                <h4 className="text-sm font-bold uppercase tracking-widest font-mono opacity-60">System Traffic</h4>
-                <div className="text-4xl font-bold font-mono mt-2">{activityLogs.length * 7}<span className="text-xs opacity-40 ml-2">Request/min</span></div>
-                <div className="mt-4 flex gap-2">
-                  <span className="px-2 py-1 bg-green-500/20 text-green-400 text-[8px] font-bold rounded uppercase">Active Node_Alpha</span>
-                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-[8px] font-bold rounded uppercase">Pulse: Stable</span>
-                </div>
-              </div>
-              <div className="bg-white border border-slate-200 rounded-2xl p-6">
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono mb-4">Node Latency (Global)</h4>
-                <div className="space-y-3">
-                  {['Tashkent', 'Frankfurt', 'Singapore'].map(loc => (
-                    <div key={loc} className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-600">{loc}</span>
-                      <div className="flex-1 mx-4 h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-600 w-3/4 animate-pulse" />
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-400">12ms</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest font-mono flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-blue-600" /> Live Feed (Owner Access Only)
-                </h3>
-                <span className="text-[8px] font-bold text-blue-600 animate-pulse uppercase">Syncing Real-time</span>
-              </div>
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {activityLogs.map(log => (
-                  <div key={log.id} className="flex items-start gap-4 p-3 bg-white rounded-xl border border-slate-100 group hover:border-blue-200 transition-all">
-                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
-                      {log.action === 'LOGIN' ? <Eye className="w-4 h-4 text-green-500" /> : <MousePointer2 className="w-4 h-4 text-slate-400" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] font-bold text-slate-900 truncate">{log.userEmail}</span>
-                        <span className="text-[8px] font-mono text-slate-400">
-                          {log.createdAt?.seconds ? new Date(log.createdAt.seconds * 1000).toLocaleTimeString() : 'Recent'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[8px] font-bold uppercase py-0.5 px-1.5 bg-slate-100 text-slate-500 rounded">{log.action}</span>
-                        <p className="text-[10px] text-slate-500 truncate">{log.details}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         )}
@@ -1087,13 +1133,13 @@ function SupportChat({ messages, user, profile, onSendMessage }: {
     }
   }, [messages]);
 
-  const handleSend = async (e: React.FormEvent) => {
+  const handleSend = async (e: FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
     
     await onSendMessage({
       senderId: user.uid,
-      senderName: profile?.displayName || user.displayName || 'Anon Node',
+      senderName: profile?.displayName || user.displayName || 'Anonim Tugun',
       text: inputText,
       isAdmin: profile?.role === 'owner' || profile?.role === 'admin'
     });
@@ -1108,8 +1154,8 @@ function SupportChat({ messages, user, profile, onSendMessage }: {
             <MessageSquare className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xs font-bold uppercase tracking-widest">Nexus Support</div>
-            <div className="text-[8px] font-mono text-blue-400 animate-pulse uppercase">Lead Engineers Online</div>
+            <div className="text-xs font-bold uppercase tracking-widest">Nexus Qo'llab-quvvatlash</div>
+            <div className="text-[8px] font-mono text-blue-400 animate-pulse uppercase">Bosh muhandislar onlayn</div>
           </div>
         </div>
       </div>
@@ -1120,8 +1166,8 @@ function SupportChat({ messages, user, profile, onSendMessage }: {
             <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mb-4 text-slate-300">
               <MessageSquare className="w-6 h-6" />
             </div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Session Initiated</p>
-            <p className="text-[10px] text-slate-400 mt-2">Connecting to lead engineers. How can we help you today?</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sessiya Boshlandi</p>
+            <p className="text-[10px] text-slate-400 mt-2">Bosh muhandislar bilan bog'lanish. Sizga qanday yordam bera olamiz?</p>
           </div>
         )}
         {messages.map((msg) => (
@@ -1134,7 +1180,7 @@ function SupportChat({ messages, user, profile, onSendMessage }: {
               {msg.text}
             </div>
             <span className="text-[8px] font-bold text-slate-400 uppercase mt-1 px-1">
-              {msg.senderName} • {msg.createdAt?.seconds ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString() : 'Pending'}
+              {msg.senderName} • {msg.createdAt?.seconds ? new Date(msg.createdAt.seconds * 1000).toLocaleTimeString() : 'Kutilmoqda'}
             </span>
           </div>
         ))}
@@ -1146,7 +1192,7 @@ function SupportChat({ messages, user, profile, onSendMessage }: {
             type="text" 
             value={inputText}
             onChange={e => setInputText(e.target.value)}
-            placeholder="Secure message link..."
+            placeholder="Xavfsiz xabar..."
             className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-blue-500 transition-all font-medium"
           />
           <button 
@@ -1172,52 +1218,52 @@ function ServiceRequestForm({ onSubmit, onCancel }: { onSubmit: (data: any) => v
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Initiate <span className="text-blue-600">Project</span></h2>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 font-mono text-center">Contact: @mr1s_tuyginov | +998950097129</p>
+        <h2 className="text-2xl font-bold tracking-tight">Loyihani <span className="text-blue-600">Boshlash</span></h2>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 font-mono text-center">Bog'lanish: @mr1s_tuyginov | +998950097129</p>
       </div>
 
       <div className="space-y-4">
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Full Name / Organization</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">To'liq ism / Tashkilot</label>
           <input 
             type="text" 
             value={formData.customerName}
             onChange={e => setFormData({...formData, customerName: e.target.value})}
             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none" 
-            placeholder="Identity Required"
+            placeholder="Ismingizni kiriting"
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Contact Method (Telegram/Phone)</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Bog'lanish usuli (Telegram/Telefon)</label>
           <input 
             type="text" 
             value={formData.customerContact}
             onChange={e => setFormData({...formData, customerContact: e.target.value})}
             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none" 
-            placeholder="@alias or +998..."
+            placeholder="@alias yoki +998..."
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Strategic Goal (Project Type)</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Strategik maqsad (Loyiha turi)</label>
           <select 
             value={formData.projectType}
             onChange={e => setFormData({...formData, projectType: e.target.value as any})}
             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none"
           >
-            <option value="web">Web Application / SEO</option>
-            <option value="apk">Mobile App (Android/APK)</option>
-            <option value="bot">Custom Telegram Bot</option>
-            <option value="infra">Backend / Infrastructure</option>
-            <option value="other">General Engineering</option>
+            <option value="web">Veb Ilova / SEO</option>
+            <option value="apk">Mobil Ilova (Android/APK)</option>
+            <option value="bot">Maxsus Telegram Bot</option>
+            <option value="infra">Backend / Infratuzilma</option>
+            <option value="other">Umumiy muhandislik</option>
           </select>
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Mission Parameters (Description)</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Missiya parametrlari (Tavsif)</label>
           <textarea 
             value={formData.description}
             onChange={e => setFormData({...formData, description: e.target.value})}
             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 outline-none h-24" 
-            placeholder="Explain your goals..."
+            placeholder="Maqsadingizni tushuntiring..."
           />
         </div>
       </div>
@@ -1226,7 +1272,7 @@ function ServiceRequestForm({ onSubmit, onCancel }: { onSubmit: (data: any) => v
         onClick={() => onSubmit(formData)}
         className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
       >
-        <Send className="w-4 h-4" /> Deploy Request
+        <Send className="w-4 h-4" /> So'rovni yuborish
       </button>
     </div>
   );
@@ -1248,24 +1294,24 @@ function ProductForm({ initialData, onSubmit, onCancel }: {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold">{initialData ? 'Update Asset' : 'New Marketplace Asset'}</h2>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 font-mono">Asset Metadata Configuration</p>
+        <h2 className="text-2xl font-bold">{initialData?.id !== 'new' ? 'Aktivni yangilash' : 'Yangi bozor aktivi'}</h2>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 font-mono">Aktiv meta-ma'lumotlarini sozlash</p>
       </div>
 
       <div className="space-y-4">
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Asset Name</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Aktiv Nomi</label>
           <input 
             type="text" 
             value={formData.name}
             onChange={e => setFormData({...formData, name: e.target.value})}
             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500" 
-            placeholder="e.g. Enterprise Auth Core"
+            placeholder="Masalan: Enterprise Auth Core"
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Type</label>
+            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Turi</label>
             <select 
               value={formData.type}
               onChange={e => setFormData({...formData, type: e.target.value})}
@@ -1279,21 +1325,21 @@ function ProductForm({ initialData, onSubmit, onCancel }: {
             </select>
           </div>
           <div>
-            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Category</label>
+            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Kategoriyasi</label>
             <select 
               value={formData.category}
               onChange={e => setFormData({...formData, category: e.target.value})}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
             >
-              <option>Core Infrastructure</option>
-              <option>Authentication SDKs</option>
-              <option>Data Orchestration</option>
-              <option>Cloud Automation</option>
+              <option value="Core Infrastructure">Asosiy infratuzilma</option>
+              <option value="Authentication SDKs">Autentifikatsiya SDK'lari</option>
+              <option value="Data Orchestration">Ma'lumotlar orkestratsiyasi</option>
+              <option value="Cloud Automation">Bulutli avtomatlashtirish</option>
             </select>
           </div>
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Base Price ($)</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Asosiy narx ($)</label>
           <input 
             type="number" 
             value={formData.price}
@@ -1302,12 +1348,12 @@ function ProductForm({ initialData, onSubmit, onCancel }: {
           />
         </div>
         <div>
-          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Description</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block font-mono">Tavsifi</label>
           <textarea 
             value={formData.description}
             onChange={e => setFormData({...formData, description: e.target.value})}
             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 h-32" 
-            placeholder="Detailed technical specifications..."
+            placeholder="Texnik xususiyatlar..."
           />
         </div>
       </div>
@@ -1317,13 +1363,13 @@ function ProductForm({ initialData, onSubmit, onCancel }: {
           onClick={() => onSubmit(formData)}
           className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
         >
-          {initialData ? 'Commit Update' : 'Initialize Asset'}
+          {initialData?.id !== 'new' ? 'Yangilanishlarni saqlash' : 'Aktivni yaratish'}
         </button>
         <button 
           onClick={onCancel}
           className="px-6 py-4 border border-slate-200 rounded-xl font-bold text-slate-400 hover:bg-slate-50 uppercase tracking-widest"
         >
-          Cancel
+          Bekor qilish
         </button>
       </div>
     </div>
@@ -1332,11 +1378,11 @@ function ProductForm({ initialData, onSubmit, onCancel }: {
 
 function PortfolioDetails({ member, onClose }: { member: UserProfile; onClose: () => void }) {
   const details = [
-    { icon: Briefcase, label: 'Specialization', value: member.specialization || 'General Engineer' },
-    { icon: Award, label: 'Experience', value: member.experience || '3+ Years' },
-    { icon: GraduationCap, label: 'Education', value: member.education || 'CS Degree' },
-    { icon: Zap, label: 'Main Stack', value: member.skills?.join(', ') || 'React, Node, Firebase' },
-    { icon: Github, label: 'Repository', value: member.github || 'github.com/nexusdev' },
+    { icon: Briefcase, label: 'Mutaxassislik', value: member.specialization || 'Umumiy muhandis' },
+    { icon: Award, label: 'Tajriba', value: member.experience || '3+ Yil' },
+    { icon: GraduationCap, label: "Ta'lim", value: member.education || "Oliy ma'lumot" },
+    { icon: Zap, label: 'Asosiy stek', value: member.skills?.join(', ') || 'React, Node, Firebase' },
+    { icon: Github, label: 'Repozitoriy', value: member.github || 'github.com/nexusdev' },
     { icon: MessageSquare, label: 'Telegram', value: member.telegram || '@mr1s_tuyginov' },
   ];
 
@@ -1348,16 +1394,18 @@ function PortfolioDetails({ member, onClose }: { member: UserProfile; onClose: (
         </div>
         <div>
           <h2 className="text-3xl font-bold tracking-tight">{member.displayName}</h2>
-          <p className="text-sm text-blue-600 font-bold uppercase tracking-widest mt-1 font-mono">{member.role}</p>
+          <p className="text-sm text-blue-600 font-bold uppercase tracking-widest mt-1 font-mono">
+            {member.role === 'owner' ? 'EGA' : member.role === 'admin' ? 'ADMIN' : "A'ZO"}
+          </p>
           <div className="flex gap-2 mt-4">
-            <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500">Node v4.0.2</span>
-            <span className="px-3 py-1 bg-green-100 rounded-full text-[10px] font-bold uppercase tracking-widest text-green-600">Active</span>
+            <span className="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500">Tugun v4.0.2</span>
+            <span className="px-3 py-1 bg-green-100 rounded-full text-[10px] font-bold uppercase tracking-widest text-green-600">Faol</span>
           </div>
         </div>
       </div>
 
       <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 italic text-slate-600 leading-relaxed text-sm">
-        "{member.bio || 'Architecting the future through high-performance engineering modules and scalable infrastructure solutions.'}"
+        "{member.bio || 'Yuqori samarali muhandislik modullari va kengaytiriladigan infratuzilma yechimlari orqali kelajakni qurish.'}"
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -1376,10 +1424,10 @@ function PortfolioDetails({ member, onClose }: { member: UserProfile; onClose: (
 
       <div className="flex gap-4">
         <button className="flex-1 bg-slate-900 text-white py-4 rounded-2xl font-bold uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-100 flex items-center justify-center gap-2">
-          <LinkIcon className="w-4 h-4" /> View Work
+          <LinkIcon className="w-4 h-4" /> Ishlarni ko'rish
         </button>
         <button onClick={onClose} className="px-8 py-4 border border-slate-200 rounded-2xl font-bold uppercase tracking-widest text-slate-400 hover:bg-slate-50">
-          Close
+          Yopish
         </button>
       </div>
     </div>
@@ -1392,14 +1440,14 @@ function Footer() {
       <div className="flex gap-6">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-          SYSTEMS OPTIMAL
+          TIZIMLAR OPTIMAL
         </div>
-        <div>LATENCY: 14ms</div>
-        <div className="hidden sm:block">REGION: GLOBAL-NODE-S1</div>
+        <div>KUCHLANISH: 14ms</div>
+        <div className="hidden sm:block">HUDUD: GLOBAL-NODE-S1</div>
       </div>
       <div className="flex gap-6">
-        <div className="hidden md:block">© 2026 NEXUS DEV ARCHITECTURE.</div>
-        <div className="text-blue-500 cursor-pointer hover:text-blue-700 transition-colors">API_DOCUMENTATION</div>
+        <div className="hidden md:block">© 2026 NEXUS DEV ARXITEKTURASI.</div>
+        <div className="text-blue-500 cursor-pointer hover:text-blue-700 transition-colors">API_HUJJATLARI</div>
       </div>
     </footer>
   );
